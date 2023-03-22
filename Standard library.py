@@ -1,60 +1,92 @@
+# Import the below libraries to use their methods globally in any function
 import os
 import pandas as pd
 import shutil
 import stat
+import string
 
-#File location for Drawings
-#DRW_source = r"C:\LAC Conveyors\Playground\Playground Kon\Design Table Trial\Drawing Detail\\"
-DRW_source = r"C:\LAC Conveyors\Playground\Playground Kon\Design Table Trial\Macro DRW\\"
-#File location for BOMs
-XLS_source = r"C:\LAC Conveyors\Playground\Playground Kon\Design Table Trial\Drawing Detail\\"
-#File location for library
-End_source = r"C:\LAC Conveyors\Playground\Playground Chris Yates\Python Tests\\"
+# List containing all uppercase alphabet letters
+alphabet = list(string.ascii_uppercase)
+
+# File location for macro generated drawings
+DRW_source = r"C:\LAC Conveyors\Standard Module CAD Library\Pallet\Roller Straight\Sections\Library Generation Related\Macro-Generated Drawings\\"
+# File location for BOMs (will become equal to generated eventually)
+XLS_source = r"C:\LAC Conveyors\Standard Module CAD Library\Pallet\Roller Straight\Sections\Library Generation Related\Master Drawings\\"
+# File location for issued drawings
+End_source = r"C:\LAC Conveyors\Standard Module CAD Library\Pallet\Roller Straight\Sections\Issued Standard Drawings\\"
 
 #------------------------------------------------------------ 
+# Primary function that runs all sub functions
 def CopyFiles(source_folder, destination_folder, bom_folder):
-    prtName = FindExcelDocs(bom_folder)
+    
+    # List containing names of each BOM, also creates folder for each
+    BOM_List = FindExcelDocs(bom_folder)
+    
+    # For each file in the generated folder obtain its location name
     for file in os.listdir(source_folder):
         source = source_folder + file
-        for BOM in prtName:
-            num = prtName.index(BOM)
+        
+        # For every BOM, set the destination folder to the corresponding name
+        for BOM in BOM_List:
+            num = BOM_List.index(BOM)
             dest = destination_folder[:-2] + "\\" + File_name[num] + "\\"
-            #destination = dest + file
+            # Self explanatory, see function for more info
             CreateSubFolders(dest)
-            #destination = dest + file
+            
+            # For each part in the BOM copy it to a folder based on the identifier (e.g -L)
             for item in BOM:
-                sort(item, source, dest, file, 0)
-                sort(item, source, dest, file, 1)
-                sort(item, source, dest, file, 2)
-                sort(item, source, dest, file, 3)
-    
+                sort(item, source, dest, file, 0) # Copy lasered
+                sort(item, source, dest, file, 1) # Copy Machined
+                sort(item, source, dest, file, 2) # Copy Fabrications
+                sort(item, source, dest, file, 3) # Copy Rollers
+                sort(item, source, dest, file, 4) # Copy Misc
+                sort(item, source, dest, file, 5) # Copy Plastics
+                sort(item, source, dest, file, 6) # Copy Sub-Assembly
+                
+    # Copy the top-level assembly drawing at the end
     CopyAssy(source_folder, destination_folder)
-    #print(File_name)
+    print("Operation completed")
 #------------------------------------------------------------ 
 def FindExcelDocs(source):
+    
+    # Sets the File_name list to global so it can be used in other functions
     global File_name
+    
     BOMs = []
     File_name = []
+    
+    # If any file is an excel sheet (BOM), create a folder for it and add its name to the File_name list
     for file in os.listdir(source):
         if file.endswith(".xls") or file.endswith(".xlsx"):
             CreateFolder(file, End_source)
             File_name.append(dirName)
             df = pd.read_excel(source + file, usecols="B")
             BOM = []
+            
+            # Add each part from a BOM to its own list then add this full list to the giant BOMs list
             for num in range(len(df)):
                 BOM.append(df.iloc[num][0])
             BOMs.append(BOM)
+            
+    # The function finally outputs a list of BOMs containing all parts from each individual BOM      
     return(BOMs)
 #------------------------------------------------------------                    
 def CreateFolder(name, location):   
+    
+    # Allows dirName to be used outside of the function (see above)
     global dirName
+    
+    # Remove the excel extension from a BOM (leaving just its name)
     try:
         dirName = name.strip(".xlsx")
     except:
         dirName = name.strip(".xls")
-        
+    
+    # Location is used when the function is called and therefore is defined elsewhere
+    # Creates the destination (path) for creating the folder
     path = os.path.join(location, dirName)
     
+    # Attempt to create the folder if this is the first time or skip as it cant be made again
     try:
         os.mkdir(path)
         print("Folder '% s' created" % dirName)
@@ -62,27 +94,38 @@ def CreateFolder(name, location):
         pass
 #------------------------------------------------------------         
 def CopyAssy(source_folder, destination_folder):
-    for num in File_name:
-        i = File_name.index(num)
-        for file in os.listdir(source_folder):            
-            source = source_folder + file
-            dest = destination_folder[:-2] + "\\" + File_name[i] + "\\"
-            destination = dest + file
-            Assy = str(File_name[i]) + ".SLDDRW"
-            if os.path.isfile(source) and Assy == file:
-                try:
-                    #os.chmod(destination, stat.S_IWRITE)
-                    shutil.copy(source, destination)
-                    print("Copied assembly", file)
-                    #continue
-                except:
-                    os.chmod(destination, stat.S_IWRITE)
-                    shutil.copy(source, destination)
-                    print("Updated assembly", file)
-                    #continue
+    
+    # Sets the index position in the list [File_name] for each entry (a.k.a Assembly)
+    for File in File_name:
+        i = File_name.index(File)
+        
+        # Cycle each letter in the alphabet starting at [A] then..
+        # Cycle each file in the generated folder and set its current location & destination..
+        # Attempt to copy the assembly if the drawing for it existis as a .pdf
+        for letter in alphabet:
+            for file in os.listdir(source_folder):            
+                source = source_folder + file
+                dest = destination_folder[:-2] + "\\" + File_name[i] + "\\"
+                destination = dest + file
+                # Attempt to create a valid assembly name
+                Assy = str(File_name[i]) + "-" + str(letter) + ".PDF"
+                
+                # If the name we created matches a real assembly it will copy or update existing
+                if Assy == file:
+                    try:
+                        shutil.copy(source, destination)
+                        print("Copied assembly", file)
+                    except:
+                        os.chmod(destination, stat.S_IWRITE)
+                        shutil.copy(source, destination)
+                        print("Updated assembly", file)
 #------------------------------------------------------------         
 def CreateSubFolders(location):
-    Type = ["Fabrications", "Lasered", "Machined", "Rollers"]
+    
+    # List of sub-folders we need to generate
+    Type = ["Fabrications", "Lasered", "Machined", "Rollers", "Misc", "Plastic", "Sub-Assembly"]
+    
+    # Uses location defined elsewhere and attaches the sub-folder extension to create the folder
     for i in Type:
         path = os.path.join(location, i)   
         try:
@@ -92,22 +135,49 @@ def CreateSubFolders(location):
             pass
 #------------------------------------------------------------ 
 def sort(item, source, dest, file, option):
-    #destination = dest + file
-    Types = [".SLDDRW", ".pdf", ".DXF"]
-    for _type in Types:
-        i = ["L", "M", "F", "R"]
-        Folders = ["Lasered\\", "Machined\\", "Fabrications\\", "Rollers\\"]
-        doc = str(item) + _type
-        if os.path.isfile(source) and doc == file:
-            if item[-1] == i[option]:
-                destination = dest + Folders[option] + file
-                try:
-                    os.chmod(destination, stat.S_IWRITE)
-                    shutil.copy(source, destination)
-                    print("Updated ", file)
-                except:
-                    shutil.copy(source, destination)
-                    print("Copied ", file)
+    
+    # List of possible file types (PDF included twice due to some files using uppercase)
+    Types = [".SLDDRW", ".pdf", ".DXF", ".PDF"]
+    
+    # Lists containing sub-folders and identifier types - must be corresponding
+    for Type in Types:
+        i = ["-L", "-M", "-F", "-R", "-D", "-P", "-A"]
+        Folders = ["Lasered\\", "Machined\\", "Fabrications\\", "Rollers\\", "Misc\\", "Plastic\\", "Sub-Assembly\\"]
+        
+        # Gets the latest revision if the file is a PDF (not necessary for DXFs etc)
+        if Type == ".pdf" or ".PDF":
+            for letter in alphabet:
+                j = alphabet.index(letter)
+                # Attempt to create a valid file name
+                doc = str(item) + "-" + alphabet[j] + Type
+                
+                # If our created name matches a real file, copy it to the folder corresponding
+                # with its identifier letters at the end
+                if doc == file:
+                    if item[-2:] == i[option]:
+                        destination = dest + Folders[option] + file
+                        try:
+                            os.chmod(destination, stat.S_IWRITE)
+                            shutil.copy(source, destination)
+                            print("Updated ", file)
+                        except:
+                            shutil.copy(source, destination)
+                            print("Copied ", file)
+                            
+        # No need to cycle revisions so repeat the above without a rev at the end (e.g "-A")
+        else:
+            doc = str(item) + Type
+            if doc == file:
+                if item[-2:] == i[option]:
+                    destination = dest + Folders[option] + file
+                    try:
+                        os.chmod(destination, stat.S_IWRITE)
+                        shutil.copy(source, destination)
+                        print("Updated ", file)
+                    except:
+                        shutil.copy(source, destination)
+                        print("Copied ", file)
 #------------------------------------------------------------
 
+# EXECUTE ORDER 66...
 CopyFiles(DRW_source, End_source, XLS_source)
